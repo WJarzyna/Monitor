@@ -37,13 +37,10 @@ set size 1,1\n\
 
 
 #define LOG_FILE "/tmp/monitor_log"
-#define SLOG_FILE "/home/kon/log_"
 
 
 int colors;
 unsigned log_en;
-
-
 
 
 
@@ -350,28 +347,37 @@ void save_log( void )
   char lfilename[256];
   char timebuf[64];
   char buf[1024];
+
+  char* env_home = getenv("HOME");
+  if( env_home == NULL )
+    {
+      fprintf( stderr, "Unable to read environment variable $HOME. Log unsaved\n");
+      return;
+    }
   
   time_t rawtime = time(NULL);
   strftime( timebuf, 63, "%F %T", localtime(&rawtime ) );
-  sprintf( lfilename, "%s%s", SLOG_FILE, timebuf);
+  sprintf( lfilename, "%s/log_%s", env_home, timebuf);
   
-  int slog = open( lfilename, O_RDWR);
-  if( slog == -1 ) fprintf( stderr, "Unable to open log save file. Log unsaved\n");
-  else
+  FILE* slog = fopen( lfilename, "w");
+  if( slog == NULL )
     {
-      FILE* log = fopen( LOG_FILE, "r");
-      if( log == NULL ) fprintf( stderr, "Unable to open temporary log file. Log unsaved\n");
-      else
-	{
-	  while( fgets( buf, 1023, log ) != NULL ) write( slog, buf, strlen( buf ) );
-
-	  fclose( log );
-	  close( slog );
- 
-	}
-      
+      fprintf( stderr, "Unable to open log save file. Log unsaved\n");
+      return;
     }
+  
+  FILE* log = fopen( LOG_FILE, "r");
+  if( log == NULL )
+    {
+      fprintf( stderr, "Unable to open temporary log file. Log unsaved\n");
+      return;
+    }
+  
+  while( fgets( buf, 1023, log ) != NULL ) fprintf( slog, "%s", buf );
 
+  fclose( log );
+  fclose( slog );
+  fprintf( stderr, "Log saved at: %s\n", lfilename);
 }
 
 
@@ -411,17 +417,16 @@ int main(int argc, char** argv)
   print_basics(&cpudata);
   run(&cpudata);
 
+  endwin();
+
   if( log_en )
     {
       plot_log( &cpudata );
-
       if( log_save ) save_log();
       remove( LOG_FILE );
     }
   
   free(cpudata.cores);
-  
-  endwin();
 
   return 0;
 }
